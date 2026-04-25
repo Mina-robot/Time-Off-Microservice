@@ -15,6 +15,12 @@ export class TimeOffRequestEntity {
   @Column({ type: 'float' })
   daysRequested: number;
 
+  @Column({ nullable: true })
+  type?: string;
+
+  @Column({ nullable: true })
+  reason?: string;
+
   @Column({ type: 'date' })
   startDate: string;
 

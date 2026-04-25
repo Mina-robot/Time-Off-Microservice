@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { BalancesService } from './balances.service';
 import { UpsertBalanceDto } from './dto/upsert-balance.dto';
 
@@ -6,10 +6,10 @@ import { UpsertBalanceDto } from './dto/upsert-balance.dto';
 export class BalancesController {
   constructor(private readonly balancesService: BalancesService) {}
 
-  @Get(':employeeId/:locationId')
+  @Get(':employeeId')
   async getBalance(
     @Param('employeeId') employeeId: string,
-    @Param('locationId') locationId: string,
+    @Query('locationId') locationId: string,
   ) {
     return this.balancesService.getBalance(employeeId, locationId);
   }

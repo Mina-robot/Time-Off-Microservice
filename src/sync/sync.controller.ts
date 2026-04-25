@@ -21,3 +21,26 @@ export class SyncController {
     return this.syncService.getAuditTrail();
   }
 }
+
+@Controller('hcm')
+export class HcmSyncController {
+  constructor(private readonly syncService: SyncService) {}
+
+  @Post('batch-sync')
+  async batch(
+    @Body('balances')
+    payload: Array<{
+      employeeId: string;
+      locationId: string;
+      availableDays?: number;
+      remainingBalance?: number;
+    }>,
+  ) {
+    const balances: UpsertBalanceDto[] = (payload ?? []).map((item) => ({
+      employeeId: item.employeeId,
+      locationId: item.locationId,
+      availableDays: item.availableDays ?? item.remainingBalance ?? 0,
+    }));
+    return this.syncService.syncBatch(balances);
+  }
+}

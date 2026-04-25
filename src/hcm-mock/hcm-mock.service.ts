@@ -38,6 +38,31 @@ export class HcmMockService {
     return Promise.all(payload.map((item) => this.upsertBalance(item)));
   }
 
+  async resetBalances(
+    balances: Array<{
+      employeeId: string;
+      locationId: string;
+      remainingBalance: number;
+    }>,
+  ) {
+    await this.hcmRepository.clear();
+    return Promise.all(
+      balances.map((item) =>
+        this.upsertBalance({
+          employeeId: item.employeeId,
+          locationId: item.locationId,
+          availableDays: item.remainingBalance,
+        }),
+      ),
+    );
+  }
+
+  async snapshot() {
+    return this.hcmRepository.find({
+      order: { employeeId: 'ASC', locationId: 'ASC' },
+    });
+  }
+
   async reserve(payload: HcmReserveDto) {
     const balance = await this.getBalance(payload.employeeId, payload.locationId);
     if (balance.availableDays < payload.days) {

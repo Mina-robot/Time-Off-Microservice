@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { HcmBalanceDto } from './dto/hcm-balance.dto';
 import { HcmReserveDto } from './dto/hcm-reserve.dto';
 import { HcmMockService } from './hcm-mock.service';
@@ -7,31 +7,59 @@ import { HcmMockService } from './hcm-mock.service';
 export class HcmMockController {
   constructor(private readonly hcmMockService: HcmMockService) {}
 
-  @Get('balances/:employeeId/:locationId')
+  @Get('balances/:employeeId')
   async getBalance(
     @Param('employeeId') employeeId: string,
-    @Param('locationId') locationId: string,
+    @Query('locationId') locationId: string,
   ) {
     return this.hcmMockService.getBalance(employeeId, locationId);
   }
 
-  @Post('balances/realtime')
-  async realtimeUpdate(@Body() payload: HcmBalanceDto) {
-    return this.hcmMockService.upsertBalance(payload);
+  @Post('reset')
+  async reset(
+    @Body()
+    payload: {
+      balances: Array<{
+        employeeId: string;
+        locationId: string;
+        remainingBalance: number;
+      }>;
+    },
+  ) {
+    return this.hcmMockService.resetBalances(payload.balances ?? []);
   }
 
-  @Post('balances/batch')
-  async batchUpdate(@Body() payload: HcmBalanceDto[]) {
-    return this.hcmMockService.batchUpsert(payload);
+  @Post('batch-sync')
+  async batchSync(
+    @Body()
+    payload: {
+      balances: Array<{
+        employeeId: string;
+        locationId: string;
+        remainingBalance: number;
+      }>;
+    },
+  ) {
+    const balances: HcmBalanceDto[] = (payload.balances ?? []).map((item) => ({
+      employeeId: item.employeeId,
+      locationId: item.locationId,
+      availableDays: item.remainingBalance,
+    }));
+    return this.hcmMockService.batchUpsert(balances);
   }
 
-  @Post('reserve')
-  async reserve(@Body() payload: HcmReserveDto) {
+  @Post('deduct')
+  async deduct(@Body() payload: HcmReserveDto) {
     return this.hcmMockService.reserve(payload);
   }
 
-  @Post('release')
-  async release(@Body() payload: HcmReserveDto) {
+  @Post('restore')
+  async restore(@Body() payload: HcmReserveDto) {
     return this.hcmMockService.release(payload);
+  }
+
+  @Get('snapshot')
+  async snapshot() {
+    return this.hcmMockService.snapshot();
   }
 }

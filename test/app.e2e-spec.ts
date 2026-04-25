@@ -15,7 +15,6 @@ describe('Time-off Microservice (e2e)', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
-    app.setGlobalPrefix('api');
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -37,7 +36,7 @@ describe('Time-off Microservice (e2e)', () => {
 
   it('returns service health', () => {
     return request(app.getHttpServer())
-      .get('/api')
+      .get('/')
       .expect(200)
       .expect((response) => {
         expect(response.body).toMatchObject({
@@ -48,42 +47,54 @@ describe('Time-off Microservice (e2e)', () => {
   });
 
   it('creates request and reserves balance in both systems', async () => {
-    const hcmSeed = {
-      employeeId: 'E-100',
-      locationId: 'LOC-1',
-      availableDays: 10,
-    };
     await request(app.getHttpServer())
-      .post('/api/mock-hcm/balances/realtime')
-      .send(hcmSeed)
+      .post('/mock-hcm/reset')
+      .send({
+        balances: [
+          {
+            employeeId: 'E-100',
+            locationId: 'LOC-1',
+            remainingBalance: 10,
+          },
+        ],
+      })
       .expect(201);
     await request(app.getHttpServer())
-      .post('/api/sync/hcm/realtime')
-      .send(hcmSeed)
+      .post('/hcm/batch-sync')
+      .send({
+        balances: [
+          {
+            employeeId: 'E-100',
+            locationId: 'LOC-1',
+            availableDays: 10,
+          },
+        ],
+      })
       .expect(201);
 
     const createResponse = await request(app.getHttpServer())
-      .post('/api/time-off-requests')
+      .post('/time-off-requests')
       .send({
         employeeId: 'E-100',
         locationId: 'LOC-1',
-        daysRequested: 2,
         startDate: '2026-05-01',
         endDate: '2026-05-02',
+        type: 'VACATION',
+        reason: 'Family event',
       })
       .expect(201);
 
     expect(createResponse.body.status).toBe('PENDING');
 
     await request(app.getHttpServer())
-      .get('/api/balances/E-100/LOC-1')
+      .get('/balances/E-100?locationId=LOC-1')
       .expect(200)
       .expect((response) => {
         expect(response.body.availableDays).toBe(8);
       });
 
     await request(app.getHttpServer())
-      .get('/api/mock-hcm/balances/E-100/LOC-1')
+      .get('/mock-hcm/balances/E-100?locationId=LOC-1')
       .expect(200)
       .expect((response) => {
         expect(response.body.availableDays).toBe(8);
@@ -92,20 +103,23 @@ describe('Time-off Microservice (e2e)', () => {
 
   it('rejects when local balance is insufficient', async () => {
     await request(app.getHttpServer())
-      .post('/api/sync/hcm/realtime')
+      .post('/hcm/batch-sync')
       .send({
-        employeeId: 'E-200',
-        locationId: 'LOC-2',
-        availableDays: 1,
+        balances: [
+          {
+            employeeId: 'E-200',
+            locationId: 'LOC-2',
+            availableDays: 1,
+          },
+        ],
       })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post('/api/time-off-requests')
+      .post('/time-off-requests')
       .send({
         employeeId: 'E-200',
         locationId: 'LOC-2',
-        daysRequested: 2,
         startDate: '2026-06-10',
         endDate: '2026-06-11',
       })
@@ -113,48 +127,58 @@ describe('Time-off Microservice (e2e)', () => {
   });
 
   it('reject workflow refunds local and HCM balances', async () => {
-    const seed = {
-      employeeId: 'E-300',
-      locationId: 'LOC-3',
-      availableDays: 5,
-    };
     await request(app.getHttpServer())
-      .post('/api/mock-hcm/balances/realtime')
-      .send(seed)
+      .post('/mock-hcm/reset')
+      .send({
+        balances: [
+          {
+            employeeId: 'E-300',
+            locationId: 'LOC-3',
+            remainingBalance: 5,
+          },
+        ],
+      })
       .expect(201);
     await request(app.getHttpServer())
-      .post('/api/sync/hcm/realtime')
-      .send(seed)
+      .post('/hcm/batch-sync')
+      .send({
+        balances: [
+          {
+            employeeId: 'E-300',
+            locationId: 'LOC-3',
+            availableDays: 5,
+          },
+        ],
+      })
       .expect(201);
 
     const createResponse = await request(app.getHttpServer())
-      .post('/api/time-off-requests')
+      .post('/time-off-requests')
       .send({
         employeeId: 'E-300',
         locationId: 'LOC-3',
-        daysRequested: 1,
         startDate: '2026-07-01',
         endDate: '2026-07-01',
       })
       .expect(201);
 
     await request(app.getHttpServer())
-      .patch(`/api/time-off-requests/${createResponse.body.id}/reject`)
-      .send({ managerComment: 'Team coverage issue' })
+      .patch(`/time-off-requests/${createResponse.body.id}/reject`)
+      .send({ reason: 'Team coverage issue' })
       .expect(200)
       .expect((response) => {
         expect(response.body.status).toBe('REJECTED');
       });
 
     await request(app.getHttpServer())
-      .get('/api/balances/E-300/LOC-3')
+      .get('/balances/E-300?locationId=LOC-3')
       .expect(200)
       .expect((response) => {
         expect(response.body.availableDays).toBe(5);
       });
 
     await request(app.getHttpServer())
-      .get('/api/mock-hcm/balances/E-300/LOC-3')
+      .get('/mock-hcm/balances/E-300?locationId=LOC-3')
       .expect(200)
       .expect((response) => {
         expect(response.body.availableDays).toBe(5);
@@ -163,28 +187,72 @@ describe('Time-off Microservice (e2e)', () => {
 
   it('supports batch sync and logs audit events', async () => {
     await request(app.getHttpServer())
-      .post('/api/sync/hcm/batch')
-      .send([
-        { employeeId: 'E-400', locationId: 'LOC-1', availableDays: 12 },
-        { employeeId: 'E-401', locationId: 'LOC-2', availableDays: 8 },
-      ])
+      .post('/hcm/batch-sync')
+      .send({
+        balances: [
+          { employeeId: 'E-400', locationId: 'LOC-1', availableDays: 12 },
+          { employeeId: 'E-401', locationId: 'LOC-2', availableDays: 8 },
+        ],
+      })
       .expect(201);
 
     await request(app.getHttpServer())
-      .get('/api/balances/E-401/LOC-2')
+      .get('/balances/E-401?locationId=LOC-2')
       .expect(200)
       .expect((response) => {
         expect(response.body.availableDays).toBe(8);
       });
 
     await request(app.getHttpServer())
-      .get('/api/sync/hcm/audit')
+      .get('/sync/hcm/audit')
       .expect(200)
       .expect((response) => {
         expect(response.body[0]).toMatchObject({
           source: 'HCM',
           operation: 'BATCH',
         });
+      });
+  });
+
+  it('cancels a pending request', async () => {
+    await request(app.getHttpServer())
+      .post('/mock-hcm/reset')
+      .send({
+        balances: [
+          {
+            employeeId: 'E-500',
+            locationId: 'LOC-5',
+            remainingBalance: 4,
+          },
+        ],
+      })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/hcm/batch-sync')
+      .send({
+        balances: [{ employeeId: 'E-500', locationId: 'LOC-5', availableDays: 4 }],
+      })
+      .expect(201);
+
+    const created = await request(app.getHttpServer())
+      .post('/time-off-requests')
+      .send({
+        employeeId: 'E-500',
+        locationId: 'LOC-5',
+        startDate: '2026-08-01',
+        endDate: '2026-08-01',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .delete(`/time-off-requests/${created.body.id}`)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .get(`/time-off-requests/${created.body.id}`)
+      .expect(200)
+      .expect((response) => {
+        expect(response.body.status).toBe('CANCELLED');
       });
   });
 });

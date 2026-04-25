@@ -1,4 +1,10 @@
-import { IsDateString, IsNumber, IsString, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 
 export class CreateTimeOffRequestDto {
   @IsString()
@@ -7,9 +13,18 @@ export class CreateTimeOffRequestDto {
   @IsString()
   locationId: string;
 
+  @IsOptional()
   @IsNumber()
   @Min(0.5)
-  daysRequested: number;
+  daysRequested?: number;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 
   @IsDateString()
   startDate: string;

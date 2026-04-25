@@ -4,4 +4,8 @@ export class ReviewTimeOffRequestDto {
   @IsOptional()
   @IsString()
   managerComment?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
