@@ -1,41 +1,80 @@
 # Time-Off Microservice
+_____
+## Table of Content
+1. [Description](#description)
+ - [What is included](#what-is-included)
+2. [Project Structure](#project-structure)
+3. [Getting Started](#getting-started)
+   - [Requirements](#requirements)
+   - [Libraries](#libraries)
+   - [How to run](#how-to-run)
+4. [API endpoints](#aPI-endpoints)
 
-A NestJS + SQLite backend for managing time-off requests and syncing leave balances with an external HCM system.
+___
 
-## What is included
+## Description
+Time-Off Microservice for handling employee leave requests and synchronizing balances with an external HCM system. The microservice will be implemented using NestJS (TypeScript) and SQLite, exposing REST APIs for creating, approving, rejecting, and querying time-off requests. It will maintain local leave balances per employee/location and integrate with an external HCM via both real-time APIs and batch updates. Key goals include data consistency, reliability under concurrent access, and clear architecture. The project will include thorough testing (unit, integration, e2e) and adhere to coding best practices (SOLID, DRY, linting).
 
+### What is included
 - REST API for creating, approving, rejecting, cancelling, and listing requests
 - Balance lookup and HCM batch sync endpoint
 - Mock HCM endpoints for testing and local development
 - Jest unit tests and E2E tests
 - SQLite persistence
 
-## Requirements
+## Project Structure
+**src/**
+|-main.ts          **Added global API and validation pipeline**
+|-appmodule.ts     **Enabled ConfigModule, TypeORM, SQLite database**
+|-balances         **Balances Module: Mirrors local balances by by employeeId + locationId** 
+|-sync             **Sync Module: Syncing**
+|-hcm-mock         **HcmMock Module: Mock HCM authoritative balances**
+|-time-off         **TimeOff Module: Request details and lifecycle status (PENDING/APPROVED/REJECTED)**
+|-common
+  |- enums
+    |- time-off-request-status.enum.ts   **Standard request statuses.**
 
+**DTOs**
+|-src/balances/dto/upsert-balance.dto.ts
+|- src/time-off/dto/create-time-off-request.dto.ts
+|- src/time-off/dto/review-time-off-request.dto.ts
+|- src/hcm-mock/dto/hcm-balance.dto.ts
+|- src/hcm-mock/dto/hcm-reserve.dto.ts
+
+**test/**
+|-src/app.controller.spec.ts  **Unit test**
+|-test/app.e2e-spec.ts        **E2E Test**
+
+## Getting Started
+
+### Requirements
 - Node.js 20+
 - npm
 
-## Setup
+### Libraries
+- @nestjs/typeorm: TypeORM integration for NestJS.
+- typeorm: ORM for entities/repositories/transactions.
+- sqlite3: SQLite driver for local database.
+- class-validator: request DTO validation.
+- class-transformer: DTO transformation support for validation pipeline.
+- @nestjs/config: environment config loading
 
+### How to run
+1. Clone repository
+2. Change directory to Time-Off-Microservices
+3. Run
 ```bash
 npm install
-cp .env.example .env
-mkdir -p data
 ```
-
-## Run the app
-
+4. Run
 ```bash
 npm run start:dev
 ```
-
-The service runs on `PORT` from `.env` (default `3000`).
+5. The service runs on `PORT` from `.env` (default `3000`).
 
 ## Run tests
-
 ```bash
 npm test
-npm run test:cov
 npm run test:e2e
 ```
 
@@ -52,9 +91,6 @@ npm run test:e2e
 ### Balances
 - `GET /balances/:employeeId?locationId=...`
 
-### HCM sync
-- `POST /hcm/batch-sync`
-
 ### Mock HCM endpoints
 These are included for testing and local simulation:
 - `GET /mock-hcm/balances/:employeeId?locationId=...`
@@ -63,78 +99,3 @@ These are included for testing and local simulation:
 - `POST /mock-hcm/restore`
 - `POST /mock-hcm/batch-sync`
 - `GET /mock-hcm/snapshot`
-
-## Postman test checklist
-
-### 1. Seed mock HCM balances
-`POST /mock-hcm/reset`
-
-Body:
-```json
-{
-  "balances": [
-    { "employeeId": "emp-001", "locationId": "loc-001", "remainingBalance": 10 }
-  ]
-}
-```
-
-### 2. Fetch balance
-`GET /balances/emp-001?locationId=loc-001`
-
-### 3. Create a time-off request
-`POST /time-off-requests`
-
-Body:
-```json
-{
-  "employeeId": "emp-001",
-  "locationId": "loc-001",
-  "startDate": "2026-04-25",
-  "endDate": "2026-04-26",
-  "type": "VACATION",
-  "reason": "Family event"
-}
-```
-
-### 4. Approve a request
-`PATCH /time-off-requests/:id/approve`
-
-### 5. Reject a request
-`PATCH /time-off-requests/:id/reject`
-
-Body:
-```json
-{
-  "reason": "Manager rejected the request"
-}
-```
-
-### 6. Cancel a request
-`DELETE /time-off-requests/:id`
-
-### 7. Batch sync from HCM
-`POST /hcm/batch-sync`
-
-Body:
-```json
-{
-  "balances": [
-    { "employeeId": "emp-001", "locationId": "loc-001", "remainingBalance": 15 }
-  ]
-}
-```
-
-## Design notes
-
-- The system treats HCM as the source of truth.
-- Local balance rows are synced defensively from HCM when missing or outdated.
-- Request creation checks current HCM balance before inserting a pending request.
-- Approval re-validates balance, deducts in HCM, and then syncs the local balance snapshot.
-- The code uses a clean NestJS module structure and keeps business logic in services.
-- SQLite is used because it was required by the assignment and keeps the project easy to run in a take-home environment.
-
-## Submission notes
-
-- Do not include `node_modules`
-- Zip the project root only
-- Keep the zip under 50 MB
