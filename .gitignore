@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+.env
+.DS_Store
+Thumbs.db
+IMPLEMENTATION_PROCEDURE.txt
